@@ -1,1 +1,12 @@
-# DATA-606
+# Predicting the Utilization Outcomes for Home Health Agencies
+
+## Introduction
+Home health care is a wide range of health care services that can be given in your home for an illness or injury. Home health care is usually less expensive, more convenient, and just as effective as care you get in a hospital or Skilled Nursing Facility (SNF)[1]. The efficiency of Home Health Care processes can impact a wide range of patients. Home Health Care Agency is primarily engaged in providing skilled nursing services and other therapeutic services for patients at home as its name implies. In resource constraint settings it is very important for the Home Health Agencies to maintain quality of care avoiding patient hospitalization or admission to long-term care institutions. The utilization outcomes of home health agencies (HHAs), namely, hospital admission (HA) rate and unplanned emergency room visit (ER) rate, have received particular attention due to the associated cost and health concerns[2]. Therefore, it is very important to understand the relationship between the quality/process measures and the utilization outcomes to provide targeted improvement initiatives for the policymakers or the government.
+
+## Aim
+The goal of the project is to give the Home Health Agencies, suggestions to focus on and prioritize improvement initiatives. Models which help understand the relationship between utilization outcomes (patient satisfaction, emergency room visit rate, and hospital admission rate) and the process measures such as timely care, healing rate, etc. needs to be built.
+
+## Dataset
+The longitudinal data about the quality of care and the health outcomes required for the utilization outcomes(outcome variables) can be obtained from the Home Health Compare dataset and patient satisfaction can be obtained from Home Health Care Consumer Assessment of Healthcare Providers and Systems Survey data. This data is published quarterly for all the Home Health Agencies in the United States under the medicare program which is publicly available on the Centers for Medicare and Medicaid Services Website. The website lists the archived files for each quarter of the year from 2010 to 2020 from which we will be dealing with the provider data. The column heading indicates the specific measure name as it appears on Home Health Compare. Each quality measure is represented in a percentage calculated for a specific quarter.
+- The dataset contains 11,212 rows for each quarter from 2010 to 2020.
+- The number of columns changes over time as measures are added to or dropped from Home Health Compare.
