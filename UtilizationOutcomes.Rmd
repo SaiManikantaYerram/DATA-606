@@ -1,0 +1,660 @@
+---
+title: "Utilization Outcomes for Home Health Agencies"
+output: html_notebook
+---
+
+**Aim**
+Determining the aspects of Home Health Agencies related to lower and higher utilization outcomes namely Hospital Admission rate and Emergency Room Visit rate.
+
+This can facilitate suggestions to focus on and prioritize improvement initiatives. The project aims to study models which help in understanding the characteristics of HHAs such as timely care, check depression, etc. associated with utilization outcomes.
+
+Importing the required libraries
+
+```{r}
+library(rpart)
+library(rpart.plot)
+library('scales')
+library(tree)
+library(dplyr)
+library(Rmisc)
+library(corrplot)
+library(naniar)
+library(nlme)
+library(ggplot2)
+library(e1071)
+library(leaps)
+```
+
+Setting the present working directory to the location where the data is stored and loading the data 
+```{r}
+setwd("D:/Project/Data")
+mytypes <- c('character','factor',rep('character',2),'factor',rep('character',2),rep('factor',7),'character',rep('numeric',18),rep('factor',2),rep('numeric',6))
+mynames <- c('CCN','state','name','address','city','Zip','phone','type','off.nursing','off.physical','off.occupational','off.speech','off.medical','off.hha','date','rating','ER','taughtdrugs','checkfall','checkdepression','flushot','pnumococcal','taughtfootcare','betterwalking','betterbed','betterbathing','lesspain','betterbreathing','betterheal','betterdrug','admitted','ER','episode','star','year','season','timeindex','median','mean','pop','ruca')
+complete_data <- read.csv("completedata.csv",sep=',')
+```
+Displaying the dimensions of the data and the feature names
+```{r}
+dim(complete_data)
+names(complete_data)
+```
+For convenience purpose I have renamed a few columns:
+
+Zip - Zip Code of Home Health Agency
+
+CCN - CMS Certification Number
+state
+
+name - Name of the Home Health Agency
+
+address
+
+city           
+
+phone
+
+type - Type of Ownership
+
+off.nursing - Offers Nursing Care Services
+
+off.physical - Offers Physical Therapy Services
+
+off.occupational - Offers Occupational Therapy Services
+
+off.speech - Offers Speech Pathology Services       
+
+off.medical - Offers Medical Social Services
+
+off.hha - Offers Home Health Aide Services
+
+date - Date Certified
+
+rating - Quality of patient care star rating
+
+timely - How often the home health team began their patients' care in a timely manner
+
+taughtdrugs - How often the home health team taught patients (or their family caregivers) about their drugs    
+
+checkfall - How often the home health team checked patients' risk of falling
+
+checkdepression - How often the home health team checked patients for depression
+
+flushot - How often the home health team determined whether patients received a flu shot for the current flu season
+
+pneumococcal - How often the home health team determined whether their patients received a pneumococcal vaccine
+
+taughtfootcare - How often the home health team got doctor's orders, gave foot care, and taught patients about foot care
+
+betterwalking - How often patients got better at walking or moving around   
+
+bettered - How often patients got better at getting in and out of bed 
+
+betterbathing - How often patients got better at bathing
+
+lesspain - How often patients had less pain when moving around
+
+betterbreathing - How often patients' breathing improved
+
+betterheal - How often patients' wounds improved or healed after an operation
+
+betterdrug - How often patients got better at taking their drugs correctly by mouth    
+
+admitted - How often home health patients had to be admitted to the hospital
+
+ER - How often patients receiving home health care needed urgent, unplanned care in the ER without being admitted
+
+ruca - Gives information whether it is an Urban HHA or Rural
+
+episode - The episode indicates how many patients and how much workload an HHA finishes every year, which can be used to suggest 
+the size of an HHA to some extend. 
+
+mean - mean household income in that zip code
+
+median- median household income in that zip code
+
+
+
+*Displaying a sample of data*
+```{r}
+head(complete_data)
+```
+
+
+The rural-urban commuting area (RUCA) codes classify U.S. census tracts using measures of population density, urbanization, and daily commuting. The classification contains two levels. Whole numbers (1-10) delineate metropolitan, micropolitan, small town, and rural commuting areas based on the size and direction of the primary (largest) commuting flows. These 10 codes are further subdivided based on secondary commuting flows, providing flexibility in combining levels to meet varying definitional needs and preferences[[1](https://www.ers.usda.gov/data-products/rural-urban-commuting-area-codes/)].  According to code definations code 1 implies that the ZIP code is Ubran and all other codes fall under Rural. Therefore converting them into Urban and Rural and making the feature a categorical column.
+```{r}
+table(complete_data$ruca)
+complete_data$ruca[complete_data$ruca==1] <- "Urban"
+complete_data$ruca[complete_data$ruca!='Urban'] <- "Rural"
+
+table(complete_data$ruca)
+
+dummyruca <- as.factor(complete_data$ruca)
+complete_data$ruca <- dummyruca
+
+complete_data[complete_data==199|complete_data==201]<-NA
+complete_data[complete_data==5030353|complete_data==16665138]<-NA
+```
+Few of the columns have same values represented in multiple ways for example the column named off.nursing has two values for Yes represented as strings "Y" and "Yes". Converting such values to 0 and 1 and changing the datatype of the columns to categorical. 
+```{r}
+complete_data$off.nursing[complete_data$off.nursing == 'Y'] <- 1
+complete_data$off.nursing[complete_data$off.nursing == 'Yes'] <- 1
+complete_data$off.physical[complete_data$off.physical == 'Y'] <- 1
+complete_data$off.physical[complete_data$off.physical == 'Yes'] <- 1
+complete_data$off.physical[complete_data$off.physical == 'N'] <- 0
+complete_data$off.physical[complete_data$off.physical == 'No'] <- 0
+
+complete_data$off.occupational[complete_data$off.occupational == 'Y'] <- 1
+complete_data$off.occupational[complete_data$off.occupational == 'Yes'] <- 1
+complete_data$off.occupational[complete_data$off.occupational == 'N'] <- 0
+complete_data$off.occupational[complete_data$off.occupational == 'No'] <- 0
+
+complete_data$off.speech[complete_data$off.speech == 'Y'] <- 1
+complete_data$off.speech[complete_data$off.speech == 'Yes'] <- 1
+complete_data$off.speech[complete_data$off.speech == 'N'] <- 0
+complete_data$off.speech[complete_data$off.speech == 'No'] <- 0
+
+complete_data$off.medical[complete_data$off.medical == 'Y'] <- 1
+complete_data$off.medical[complete_data$off.medical == 'Yes'] <- 1
+complete_data$off.medical[complete_data$off.medical == 'N'] <- 0
+complete_data$off.medical[complete_data$off.medical == 'No'] <- 0
+
+complete_data$off.hha[complete_data$off.hha == 'Y'] <- 1
+complete_data$off.hha[complete_data$off.hha == 'Yes'] <- 1
+complete_data$off.hha[complete_data$off.hha == 'N'] <- 0
+complete_data$off.hha[complete_data$off.hha == 'No'] <- 0
+
+
+complete_data$off.physical <- as.factor(complete_data$off.physical)
+complete_data$off.occupational <- as.factor(complete_data$off.occupational)
+complete_data$off.speech <- as.factor(complete_data$off.speech)
+complete_data$off.medical <- as.factor(complete_data$off.medical)
+complete_data$off.hha <- as.factor(complete_data$off.hha)
+complete_data$type <- as.factor(complete_data$type)
+complete_data$CCN <- as.factor(complete_data$CCN)
+complete_data$star <- as.factor(complete_data$star)
+complete_data$year <- as.factor(complete_data$year)
+```
+Visualizing the datatypes of features in the data
+```{r}
+#The datatypes of columns currently present in the dataframe 
+data_types <- function(frame) {
+  res <- lapply(frame, class)
+  res_frame <- data.frame(unlist(res))
+  barplot(table(res_frame), main="Data Types", col="steelblue", ylab="Number of Features")
+}
+
+#This displays a plot of the datatype of features 
+#Reference - https://stackoverflow.com/questions/21125222/determine-the-data-types-of-a-data-frames-columns
+data_types(complete_data)
+```
+Visualizing the missing values to understand if there is any pattern in the data. 
+```{r}
+vis_miss(complete_data, warn_large_data = FALSE)
+```
+Since this is a regression problem and there are a lot of missing values in the data I first thought of removing the columns which are highly correlated with each other. I plotted a correlation matrix to understand if there is any correlation between the features.
+
+```{r}
+complete_data <- data.frame(complete_data[,c(1:8,10:15)],complete_data[,c(17:28)],complete_data[,c(30:41)])
+names(complete_data)
+complete_data_withoutnull <- na.omit(complete_data)
+res <- cor(data.frame(complete_data_withoutnull[,c(15:30)],complete_data_withoutnull[,c(35:37)]))
+round(res, 2)
+```
+From the matrix we can see that the columns such as betterwalking, betterbed and betterbathing are highly correlated. Similarly mean, median and pop are highly correlated therefore I dropped them during the cleaning phase.
+
+```{r}
+#Dropping highly correlated features
+complete_data <- data.frame(complete_data[,c(1:18)],complete_data[,c(20:21)], complete_data[,c(24:35,38)])
+```
+
+Plotting the data for missingness after dropping the highly correlated columns. Since there is no significant evidence for why data is missing and there is pattern observed I decided to drop the missing values.
+
+```{r}
+vis_miss(complete_data, warn_large_data = FALSE)
+```
+Since my analysis involves two utilization outcomes: Admission Rate and Emergency Room Visit Rate, I have created two dataframes one for admission rate and other for emergency room visit rate.
+```{r}
+admitted <- data.frame(complete_data[,c(9:13)],complete_data[,c(15:25)],complete_data[,c(27,30,31,32,33)])
+names(admitted)
+```
+
+```{r}
+ER <- data.frame(complete_data[,c(9:13)],complete_data[,c(15:24)],complete_data[,c(26:27)], complete_data[,c(30:33)])
+names(ER)
+```
+
+Dropping the missing values and plotting the outcome variables to understand the distribution.  
+
+```{r}
+admitted <- na.omit(admitted)
+hist(admitted$admitted)
+dim(admitted)
+ER <- na.omit(ER)
+hist(ER$ER)
+dim(ER)
+```
+
+Functions for getting the mode and aggregating the data.
+
+```{r}
+getmode <- function(v) {
+  levels(v)[which.max(table(v))]
+} 
+
+my_summary <- function(x, id, na.rm = FALSE){   
+  if (is.numeric(x)) {     
+    return(tapply(x, id, mean, na.rm = na.rm))   
+  }     
+  if (is.factor(x)) {     
+    return(tapply(x, id, getmode))   
+  }   
+  }
+
+
+#reference: https://stackoverflow.com/questions/37509714/aggregating-mixed-data-by-factor-column
+```
+
+Since linear regression assumes that the observations/records are not dependent on each other I aggregated all the rows belonging to a Home Health Agency such that each Home Health Agency has a single row and fit the model.
+
+Admission Rate Data
+```{r}
+data_admitted_CCN <- data.frame(complete_data[,c(2,9:13)],complete_data[,c(15:25)],complete_data[,c(27,30,32,33)])
+data_admitted_CCN <- na.omit(data_admitted_CCN)
+admittedAggregated <- data.frame(lapply(data_admitted_CCN, my_summary, id=data_admitted_CCN$CCN, na.rm = TRUE))
+length(unique(data_admitted_CCN$CCN))
+admittedAggregated <- na.omit(admittedAggregated)
+dim(admittedAggregated)
+names(admittedAggregated)
+```
+Function for calculating the Root Mean Squared Error
+```{r}
+rmse <- function(error)
+{
+  sqrt(mean(error^2))
+}
+```
+Emergency Room Visit Data
+```{r}
+data_ER_CCN <- data.frame(complete_data[,c(2,9:13)],complete_data[,c(15:24)],complete_data[,c(26,27,30,32,33)])
+data_ER_CCN <- na.omit(data_ER_CCN)
+ERAggregated <- data.frame(lapply(data_ER_CCN, my_summary, id=data_ER_CCN$CCN, na.rm = TRUE))
+length(unique(data_ER_CCN$CCN))
+ERAggregated <- na.omit(ERAggregated)
+dim(ERAggregated)
+names(ERAggregated)
+```
+Applying Linear Regression Model with Admission Rate as the outcome variable
+
+```{r}
+lm.fit.admitted <- lm(admitted ~ ., data= data.frame(admittedAggregated[,c(2:21)]))
+summary(lm.fit.admitted)
+
+predictedY <- predict(lm.fit.admitted, data.frame(admittedAggregated[,c(2:21)]))
+error <- data.frame(admittedAggregated[,c(2:21)])$admitted - predictedY
+predictionRMSE <- rmse(error)
+predictionRMSE
+```
+From the model summary, we can observe that the features with lower p values(represented with three stars) such as checkfall, betterbathing, betterdrug followed by features with (**)  are important in predicting the Hospital Admission Rate.
+
+It seems likely that if any one of the p-values for the individual variables is very small, then at least one of the
+predictors is related to the response. However, this logic is flawed. Hence, if we use the individual t-statistics and associated p values in order to decide whether or not there is any association between the variables and the response, there is a very high chance that we will incorrectly conclude that there is a relationship[1].
+
+
+Fitting the tree based model to understand the structure of the data and easy to visualize decision rules for predicting a continuous (regression tree) outcome. But it doesn't give information about features which are important in predicting the outcome variable. Therefore I will be focusing more on the linear regression. 
+```{r}
+treemodel <- rpart(formula= admitted ~ ., 
+                model=TRUE,
+                data =data.frame(admittedAggregated[,c(2:21)]),cp=0.001, maxdepth = 4
+)
+#0.002
+#0.00019852
+summary(treemodel)
+rpart.plot(treemodel,digits=10,fallen.leaves=TRUE,type=4,extra=1)
+
+```
+Therefore we need to use F statistic to estimate the p value which helps us conclude if at least one predictor is related to response. But we do not know which variables are important. Therefore we use variable selection methods to determine which predictors are associated with the response.
+
+It is often the case that some or many of the
+variables used in a multiple regression model are in fact not associated
+with the response. Including such irrelevant variables leads to
+unnecessary complexity in the resulting model. By removing these
+variables—that is, by setting the corresponding coefficient estimates
+to zero—we can obtain a model that is more easily interpreted. Now
+least squares is extremely unlikely to yield any coefficient estimates
+that are exactly zero. [1]
+
+Subset Selection: This approach involves identifying a subset of the p
+predictors that we believe to be related to the response. We then fit
+a model using least squares on the reduced set of variables.[1]
+
+Forward Selection: Begins with a model containing no predictors, and then adds predictors
+to the model, one-at-a-time, until all of the predictors are in the model.
+In particular, at each step the variable that gives the greatest additional
+improvement to the fit is added to the model.[1]
+
+```{r}
+regfit.fwd=regsubsets (admitted ~ .,data=data.frame(admittedAggregated[,c(2:21)]) ,nvmax =20,
+                        method = "forward")
+
+summary(regfit.fwd)
+reg.summary = summary(regfit.fwd)
+
+reg.summary$rsq
+par(mfrow =c(2,2))
+plot(reg.summary$rss ,xlab="Number of Variables",ylab="RSS",
+       type="l")
+plot(reg.summary$adjr2 ,xlab ="Number of Variables",
+       ylab="Adjusted RSq",type="l")
+plot(reg.summary$cp ,xlab ="Number of Variables",
+     ylab="Cp",type="l")
+plot(reg.summary$bic ,xlab=" Number of Variables ",ylab=" BIC", type='l')
+
+```
+From the output above, an asterisk specifies that a given variable is included in the corresponding model.
+
+For example, it can be seen that the best 2-variables model contains only betterbathing and season variables (admitted ~ betterbathing + season).
+```{r}
+cat("\nThe least BIC value:", which.min(reg.summary$bic))
+```
+Here I am using the BIC criterion which says that the model with 10 features performed better. If we consider other metrics like Cp the model doesn't show any significant improvement after increasing the features beyond 10.
+
+Displaying the features and their coefficients included in the best 10 variable model.
+```{r}
+coef(regfit.fwd, 10)
+```
+
+
+Forward selection follows a greedy approach and might include variables early which might become redundant later.
+
+Backward Selection: Unlike forward stepwise selection, it begins with the full least squares model containing
+all p predictors, and then iteratively removes the least useful predictor,
+one-at-a-time.
+
+
+```{r}
+regfit.bwd=regsubsets (admitted ~ .,data=data.frame(admittedAggregated[,c(2:21)]) ,nvmax =20,
+                       method = "backward")
+
+summary(regfit.bwd)
+reg.summarybwd = summary(regfit.bwd)
+
+reg.summarybwd$rsq
+par(mfrow =c(2,2))
+plot(reg.summarybwd$rss ,xlab="Number of Variables",ylab="RSS",
+     type="l")
+plot(reg.summarybwd$adjr2 ,xlab ="Number of Variables",
+     ylab="Adjusted RSq",type="l")
+
+plot(reg.summarybwd$cp ,xlab ="Number of Variables",
+     ylab="Cp",type="l")
+plot(reg.summarybwd$bic ,xlab=" Number of Variables ",ylab=" BIC", type='l')
+
+```
+```{r}
+cat("\nThe least BIC value:", which.min(reg.summarybwd$bic))
+```
+Here I am using the BIC criterion which says that the model with 10 features performed better. If we consider other metrics like Cp the model doesn't show any significant improvement after increasing the features beyond 10.
+
+Displaying the features and their coefficients included in the best 10 variable model.
+
+```{r}
+coef(regfit.bwd, 10)
+```
+
+
+
+**Cross Validation**
+
+We now try to choose among the models of different sizes using crossvalidation. First, we create a vector that allocates each observation to one of k = 10 folds, and we create a matrix in which we will store the results.
+```{r}
+#Reference:An Introduction to Statistical Learning with applications in R. [link](https://www.statlearning.com/) 
+
+admittedAggregated <- data.frame(admittedAggregated[,c(2:21)])
+
+
+predict.regsubsets = function (object ,newdata ,id ,...){
+form=as.formula (object$call [[2]])
+mat=model.matrix (form ,newdata )
+coefi =coef(object ,id=id)
+xvars =names (coefi )
+mat[,xvars ]%*% coefi
+}
+
+k=10
+set.seed (1)
+folds=sample (1:k,nrow(admittedAggregated),replace =TRUE)
+cv.errors.admitted = matrix(NA ,k,19, dimnames =list(NULL, paste (1:19)))
+
+# This has given us a 10×19 matrix, of which the (i, j)th element corresponds
+# to the test MSE for the ith cross-validation fold for the best j-variable
+# model. We use the apply() function to average over the columns of this
+# apply()
+# matrix in order to obtain a vector for which the jth element is the crossvalidation
+# error for the j-variable model.
+
+for(j in 1:k){
+best.fit.admitted =regsubsets (admitted ~ .,data= admittedAggregated[folds!=j,],
+                          nvmax =19)
+for(i in 1:19) {
+  pred=predict(best.fit.admitted ,admittedAggregated[folds ==j,], id=i)
+  cv.errors.admitted[j,i]=mean((admittedAggregated$admitted[folds ==j]-pred)^2)
+  }
+}
+
+mean.cv.errors.admitted =apply(cv.errors.admitted ,2, mean)
+mean.cv.errors.admitted
+par(mfrow =c(1,1))
+plot(mean.cv.errors.admitted ,type='b')
+which.min(mean.cv.errors.admitted)
+```
+We see that cross-validation selects a 10-variable model. We now perform best subset selection on the full data set in order to obtain the 10-variable model.
+
+```{r}
+reg.best = regsubsets(admitted ~ ., data = admittedAggregated, nvmax =19)
+coef(reg.best ,10)
+```
+
+
+
+
+*Similarly Applying variable selection techjniques to understand which predictirs are related to Emergency Room Visit Rate*
+
+
+Forward Selection
+```{r}
+regfit.fwd=regsubsets (ER ~ .,data=data.frame(ERAggregated[,c(2:21)]) ,nvmax =20,
+                        method = "forward")
+
+summary(regfit.fwd)
+reg.summary = summary(regfit.fwd)
+
+reg.summary$rsq
+par(mfrow =c(2,2))
+plot(reg.summary$rss ,xlab="Number of Variables",ylab="RSS",
+       type="l")
+plot(reg.summary$adjr2 ,xlab ="Number of Variables",
+       ylab="Adjusted RSq",type="l")
+plot(reg.summary$cp ,xlab ="Number of Variables",
+     ylab="Cp",type="l")
+plot(reg.summary$bic ,xlab=" Number of Variables ",ylab=" BIC", type='l')
+```
+
+```{r}
+cat("\nThe least BIC value:", which.min(reg.summary$bic))
+```
+
+Displaying the features and their coefficients included in the best 9 variable model for the Emergency Room Visit Rate.
+```{r}
+coef(regfit.fwd, 9)
+```
+
+
+
+
+Backward Selection
+```{r}
+regfit.bwd=regsubsets (ER ~ .,data=data.frame(ERAggregated[,c(2:21)]) ,nvmax =20,
+                       method = "backward")
+
+summary(regfit.bwd)
+reg.summarybwd = summary(regfit.bwd)
+
+reg.summarybwd$rsq
+par(mfrow =c(2,2))
+plot(reg.summarybwd$rss ,xlab="Number of Variables",ylab="RSS",
+     type="l")
+plot(reg.summarybwd$adjr2 ,xlab ="Number of Variables",
+     ylab="Adjusted RSq",type="l")
+
+plot(reg.summarybwd$cp ,xlab ="Number of Variables",
+     ylab="Cp",type="l")
+plot(reg.summarybwd$bic ,xlab=" Number of Variables ",ylab=" BIC", type='l')
+
+```
+
+```{r}
+cat("\nThe least BIC value:", which.min(reg.summarybwd$bic))
+```
+
+Displaying the features and their coefficients included in the best 9 variable model for the Emergency Room Visit Rate.
+```{r}
+coef(regfit.bwd, 9)
+```
+
+Cross Validation Approach
+```{r}
+ERAggregated <- data.frame(ERAggregated[,c(2:21)])
+
+k=10
+set.seed (1)
+folds=sample (1:k,nrow(ERAggregated),replace =TRUE)
+cv.errors.ER = matrix(NA ,k,19, dimnames =list(NULL, paste (1:19)))
+
+for(j in 1:k){
+best.fit.ER =regsubsets (ER ~ .,data= ERAggregated[folds!=j,],
+                          nvmax =19)
+for(i in 1:19) {
+  pred=predict(best.fit.ER ,ERAggregated[folds ==j,], id=i)
+  cv.errors.ER[j,i]=mean((ERAggregated$ER[folds ==j]-pred)^2)
+  }
+}
+
+mean.cv.errors.ER =apply(cv.errors.ER ,2, mean)
+mean.cv.errors.ER
+par(mfrow =c(1,1))
+plot(mean.cv.errors.ER ,type='b')
+which.min(mean.cv.errors.ER)
+```
+We see that cross-validation selects a 12-variable model. We now perform best subset selection on the full data set in order to obtain the 12-variable model.
+
+
+```{r}
+reg.best = regsubsets(ER ~ ., data = ERAggregated, nvmax =19)
+coef(reg.best ,12)
+```
+
+
+**PreCovid and Covid Timeframe comparison**
+
+```{r}
+dim(complete_data)
+dim(admitted)
+```
+
+Creating seperate dataframes for precovid and after covid.
+
+```{r}
+data_precovid <- subset(complete_data, timeindex < 40)
+dim(data_precovid)
+```
+
+
+```{r}
+data_covid <- subset(complete_data, timeindex >= 40)
+dim(data_covid)
+```
+Admission Rate Data Precovid
+
+```{r}
+data_admitted_CCN_precovid <- data.frame(data_precovid[,c(2,9:13)],data_precovid[,c(15:25)],data_precovid[,c(27,30,32,33)])
+data_admitted_CCN_precovid <- na.omit(data_admitted_CCN_precovid)
+admittedAggregatedPrecovid <- data.frame(lapply(data_admitted_CCN_precovid, my_summary, id=data_admitted_CCN_precovid$CCN, na.rm = TRUE))
+length(unique(data_admitted_CCN_precovid$CCN))
+admittedAggregatedPrecovid <- na.omit(admittedAggregatedPrecovid)
+dim(admittedAggregatedPrecovid)
+names(admittedAggregatedPrecovid)
+```
+Applying backward selection method for pre covid data to understand which predictors are related to the admission rate.
+```{r}
+regfit.bwd=regsubsets (admitted ~ .,data=data.frame(admittedAggregatedPrecovid[,c(2:21)]) ,nvmax =20,
+                       method = "backward")
+
+summary(regfit.bwd)
+reg.summarybwd = summary(regfit.bwd)
+
+reg.summarybwd$rsq
+par(mfrow =c(2,2))
+plot(reg.summarybwd$rss ,xlab="Number of Variables",ylab="RSS",
+     type="l")
+plot(reg.summarybwd$adjr2 ,xlab ="Number of Variables",
+     ylab="Adjusted RSq",type="l")
+
+plot(reg.summarybwd$cp ,xlab ="Number of Variables",
+     ylab="Cp",type="l")
+plot(reg.summarybwd$bic ,xlab=" Number of Variables ",ylab=" BIC", type='l')
+```
+```{r}
+cat("\nThe least BIC value:", which.min(reg.summarybwd$bic))
+```
+Displaying the features and their coefficients included in the best 11 variable model for the admission rate **precovid**.
+```{r}
+coef(regfit.bwd,11)
+```
+
+
+
+
+Admission Rate Data after covid
+
+
+```{r}
+data_admitted_CCN_covid <- data.frame(data_covid[,c(2,9:13)],data_covid[,c(15:25)],data_covid[,c(27,30,32,33)])
+data_admitted_CCN_covid <- na.omit(data_admitted_CCN_covid)
+admittedAggregatedCovid <- data.frame(lapply(data_admitted_CCN_covid, my_summary, id=data_admitted_CCN_covid$CCN, na.rm = TRUE))
+length(unique(data_admitted_CCN_covid$CCN))
+admittedAggregatedCovid <- na.omit(admittedAggregatedCovid)
+dim(admittedAggregatedCovid)
+names(admittedAggregatedCovid)
+```
+Applying backward selection method for covid data to understand which predictors are related to the admission rate.
+```{r}
+regfit.bwd=regsubsets (admitted ~ .,data=data.frame(admittedAggregatedCovid[,c(2:21)]) ,nvmax =20,
+                       method = "backward")
+
+summary(regfit.bwd)
+reg.summarybwd = summary(regfit.bwd)
+
+reg.summarybwd$rsq
+par(mfrow =c(2,2))
+plot(reg.summarybwd$rss ,xlab="Number of Variables",ylab="RSS",
+     type="l")
+plot(reg.summarybwd$adjr2 ,xlab ="Number of Variables",
+     ylab="Adjusted RSq",type="l")
+
+plot(reg.summarybwd$cp ,xlab ="Number of Variables",
+     ylab="Cp",type="l")
+plot(reg.summarybwd$bic ,xlab=" Number of Variables ",ylab=" BIC", type='l')
+```
+
+```{r}
+cat("\nThe least BIC value:", which.min(reg.summarybwd$bic))
+```
+Displaying the features and their coefficients included in the best 4 variable model for the admission rate **after covid**.
+```{r}
+coef(regfit.bwd,4)
+```
+
+
+
+**References**
+
+1. An Introduction to Statistical Learning with applications in R. [link](https://www.statlearning.com/)
