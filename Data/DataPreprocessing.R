@@ -1,9 +1,17 @@
 library(stringr)
 library(base)
+#Setting the PWD
 setwd("C:/Users/saima/OneDrive/Desktop/Project/Data")
 getwd()
 # Data for 2010 files 
 setwd("C:/Users/saima/OneDrive/Desktop/Project/Data")
+
+#Recursively reading the files belonging to quarters into a dataframe for merging
+
+
+# Merging Multiple files from the data : Since the data has been collected over a period of time on a quarterly basis starting from 2010 - 2020 and available as multiple files and we want to analyze it all in one go,   I combined all the files into a single data frame. 
+# Data Cleaning : Prior to the data merging step, each file needed some amount of cleaning. Each file had a few columns for footnotes giving information about the characteristics of the Home Health Agencies. Since these columns were empty, they had to be dropped.  In addition to that, the number of columns changed over time in each file as some of the measures were added to or dropped from the Home Health Compare datasets. Therefore, only the columns in common across all the years have been retained for consistency and to prevent missing data.  After combining the data I had to perform a few data type conversions. Since there were many missing values in my data frame and some of the missing values were represented using codes such as 199 and 201, I had to make a plot to understand if there was any pattern in how the data was missing and since there was no significant pattern observed, I have removed all the missing values. 
+
 Lst1 <- list("0101"=1, "0401"=2, "0701"=3, "1001"=4)
 for (file in list.files(pattern = "^Provider", recursive = TRUE)) {
   quarter <- str_sub(strsplit(file, "/")[[1]][2],-4,-1)
@@ -17,7 +25,7 @@ for (file in list.files(pattern = "^HHC_SOCRATA_PRVDR", recursive = TRUE)) {
 df2020_3 <- read.csv("C:/Users/saima/OneDrive/Desktop/Project/Data/2020/home_health_services_archive_10_2020/HH_Provider_Oct2020.csv", sep=',', na.strings = "NotAvailable")
 df2020_4 <- read.csv("C:/Users/saima/OneDrive/Desktop/Project/Data/2020/home_health_services_archive_12_2020/HH_Provider_Oct2020.csv", sep=',', na.strings = "NotAvailable")
 
-### 
+### Defining the data types and feature names to be used later during the merging and cleaning process 
 mytypes27 <- c(rep('c',3),rep('f',3),'c','f','c',rep('f',6),rep('n',12))
 names27 <- c('CCN','name','address','city','state','Zip','phone','type','date','off.nursing','off.physical','off.occupational','off.speech','off.medical','off.hha','betterwalking','betterbed','bladdercontrol','lesspain','betterbathing','betterdrug','lessshortbreath','admitted','ER','stayathome','medicalwound','woundimproved')
 
@@ -68,6 +76,7 @@ name_RPT <- c('RPT_REC_NUM','PRVDR_CTRL_TYPE_CD','PRVDR_NUM','NPI','RPT_STUS_CD'
 type_NMRC <- c(rep('character',4),'numeric')
 name_NMRC <- c('RPT_REC_NUM','WKSHT_CD','LINE_NUM','CLMN_NUM','ITM_VAL_NUM')
 
+#Function for Recursively reading the episode data
 Episode <- function(df_rpt, df_nmrc) {
   names(df_rpt) <- name_RPT
   dim(df_rpt)
@@ -105,7 +114,7 @@ episode2018 = Episode(read.csv("2018/HHAFY2018/HHA_2018_RPT.CSV",sep=',',colClas
 episode2019 = Episode(read.csv("2019/HHAFY2019/HHA_2019_RPT.CSV",sep=',',colClasses=type_RPT,check.names = F), read.csv("2019/HHAFY2019/HHA_2019_NMRC.CSV",sep=',',colClasses=type_NMRC,check.names = F))
 episode2020 = Episode(read.csv("2020/HHAFY2020/HHA_2020_RPT.CSV",sep=',',colClasses=type_RPT,check.names = F), read.csv("2020/HHAFY2020/HHA_2020_NMRC.CSV",sep=',',colClasses=type_NMRC,check.names = F))
 
-
+#Recursively reading the Star Rating Data
 Lst2 <- list("01"=1, "04"=2, "07"=3, "10"=4, "06"=3, "03"=2, "08"=2)
 for (file in list.files(pattern = "^HHC_SOCRATA_HHCAHPS_PRVDR", recursive = TRUE)) {
   if (strsplit(file, "/")[[1]][1] != "2014" & strsplit(file, "/")[[1]][1] != "2015" & strsplit(file, "/")[[1]][1] != "2020") {
@@ -154,6 +163,11 @@ colClasses <- function(df) {
   return(as.data.frame(class))
 }
 
+
+#Reference - https://www.rdocumentation.org/packages/R.utils/versions/2.10.1/topics/colClasses
+#Reference - 
+
+
 `colClasses<-` <- function(df, value) {
   if (nchar(value) != ncol(df)) {
     stop("The number of columns in the dataframe does not match the number of characters in the vector of classes.")
@@ -184,15 +198,15 @@ colClasses <- function(df) {
 
 
 
-
-
+#The functions below with names starting with clean are used to read data with specific number of features as explained by the function name for example, clean37 for CSV with 37 columns. Read them into dataframes, Clean them to remove unused text columns and ensure that the final dataframe will only the columns which appear accross all the years to ensure consistency. The functions even merge the episode data with the provider data.   
+# We are concerned especially with the provider data.
 
 Clean27 <- function(df, ep, y, s, t) {
-  colClasses(df) <- paste(mytypes27, collapse="")
-  names(df) <- names27
+  colClasses(df) <- paste(mytypes27, collapse="") #Set the column types
+  names(df) <- names27 #set the column names
   setdiff(INTG_names,names27)  
-  df_bf <- data.frame(df[,1],df[,5],df[,c(2:4)],df[,c(6:8)],df[,c(10:15)],df[,9])
-  df_bf$rating <- NA
+  df_bf <- data.frame(df[,1],df[,5],df[,c(2:4)],df[,c(6:8)],df[,c(10:15)],df[,9]) #removing the unnecessary columns
+  df_bf$rating <- NA #ensuring consistency to include the features which are required for analysis across all the years
   df_bf$timely <- NA
   df_bf$taughtdrugs <- NA
   df_bf$checkfall <- NA
@@ -507,6 +521,7 @@ data20204 <- Clean70(df2020_4, episode2020, 2020, 43, 4, dfstar2020_4)
 
 head(data20204)
 
+#After all the data has been cleaned, we them merge them into a single dataframe using the rbind() function.
 
 alldata <- rbind(data20101,data20102,data20104,
                  data20111,data20112,data20113,data20114,
@@ -525,6 +540,7 @@ with(alldata, timeindex[CCN == "747329" & year == 2019])
 
 require("readxl")
 
+#Merging the HHA data with the mean and median household income data based on the ZIP code of the Home Health Agency 
 
 income <- read_excel("MedianZIP-3.xlsx")
 colClasses(income) <- paste(c('c','n','n','n'), collapse="")
@@ -533,6 +549,8 @@ names(income) <- c('Zip','median','mean','pop')
 
 head(income)
 
+
+#Including the Ruca information which gives information about the Rural or Urban Home Health Agency
 ruca <- read_excel("RUCA2006.xls")
 colClasses(ruca) <- paste(c('c','f','n','n','f'), collapse="")
 ruca <- data.frame(ruca[, c(1,3)])
@@ -563,5 +581,7 @@ names(alldata_bf1)
 dim(alldata_bf1)
 
 finaldata <- alldata_bf1
+
+#Exporting the Final Dataframe to a csv file.
 
 write.csv(finaldata, file = "completedata.csv",row.names=FALSE, na="")
